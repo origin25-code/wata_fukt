@@ -6,28 +6,30 @@ on:
 jobs:
   post_fact:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 🧪 Debug runner
-        run: echo "✅ Runner работает"
+      - name: Debug runner
+        run: echo "✅ Runner is alive"
 
-      - name: 📥 Клонируем репозиторий
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-      - name: 🐍 Устанавливаем Python
-        uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      - name: 📦 Устанавливаем зависимости
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: 🧪 Проверим, что всё на месте
+      - name: Check files
         run: ls -la
 
-      - name: 🚀 Запускаем factbot.py
+      - name: Run factbot.py
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DEBUG_CHAT_ID: ${{ secrets.DEBUG_CHAT_ID }}
         run: python factbot.py
