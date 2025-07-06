@@ -1,83 +1,51 @@
 import os
 import openai
-from telegram import Bot
-from datetime import datetime
+import requests
 
-# === ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ===
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-DEBUG_CHAT_ID = os.getenv("DEBUG_CHAT_ID", TELEGRAM_CHAT_ID)
+print("✅ Запуск factbot.py")
 
-# === ПРОВЕРКА НА ПУСТЫЕ ПЕРЕМЕННЫЕ ===
-def validate_env():
-    missing = []
-    for key, val in {
-        "OPENAI_API_KEY": OPENAI_API_KEY,
-        "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN,
-        "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID
-    }.items():
-        if not val:
-            missing.append(key)
-    if missing:
-        raise Exception(f"❌ Отсутствуют переменные: {', '.join(missing)}")
+# Загрузка переменных среды
+api_key = os.getenv("OPENAI_API_KEY")
+bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+chat_id = os.getenv("TELEGRAM_CHAT_ID")
+debug_id = os.getenv("DEBUG_CHAT_ID")
 
-# === ЗАГРУЗКА ПРОМПТА ===
-def load_prompt():
-    try:
-        with open("fact_prompt.txt", "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except Exception as e:
-        raise Exception(f"❌ Не удалось загрузить prompt: {e}")
+if not all([api_key, bot_token, chat_id]):
+    raise Exception("❌ Не найдены переменные окружения")
 
-# === ЗАПРОС К OPENAI ===
-def generate_fact(prompt: str):
-    openai.api_key = OPENAI_API_KEY
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "Ты генератор фактов"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=1.0,
-            timeout=30
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        raise Exception(f"❌ Ошибка генерации факта: {e}")
+openai.api_key = api_key
+print("🔑 OpenAI ключ загружен")
 
-# === ОТПРАВКА СООБЩЕНИЯ В TELEGRAM ===
-def send_to_telegram(text, chat_id=TELEGRAM_CHAT_ID):
-    try:
-        bot = Bot(token=TELEGRAM_TOKEN)
-        bot.send_message(chat_id=chat_id, text=text)
-    except Exception as e:
-        raise Exception(f"❌ Не удалось отправить в Telegram: {e}")
+# Загрузка промпта
+prompt_path = "fact_prompt.txt"
+if not os.path.exists(prompt_path):
+    raise FileNotFoundError(f"❌ Не найден файл: {prompt_path}")
 
-# === ОСНОВНАЯ ТОЧКА ЗАПУСКА ===
-def main():
-    try:
-        validate_env()
-        send_to_telegram("🔧 factbot стартовал", DEBUG_CHAT_ID)
+with open(prompt_path, "r", encoding="utf-8") as f:
+    prompt = f.read()
 
-        prompt = load_prompt()
-        send_to_telegram("📄 Промпт загружен", DEBUG_CHAT_ID)
+print("📄 Промпт загружен")
 
-        fact = generate_fact(prompt)
-        send_to_telegram("🧠 Факт сгенерирован", DEBUG_CHAT_ID)
+# Генерация поста
+response = openai.ChatCompletion.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": prompt}],
+    temperature=0.9,
+    max_tokens=500
+)
+text = response["choices"][0]["message"]["content"].strip()
+print("🧠 Факт сгенерирован")
 
-        send_to_telegram(fact, TELEGRAM_CHAT_ID)
-        send_to_telegram("✅ Успешно опубликован", DEBUG_CHAT_ID)
-        print(f"\n✅ Отправлено в канал:\n{fact}\n")
+# Отправка в Telegram
+def send_to_telegram(msg, to_chat_id):
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {"chat_id": to_chat_id, "text": msg}
+    r = requests.post(url, json=payload)
+    if not r.ok:
+        raise Exception(f"❌ Ошибка отправки в Telegram: {r.text}")
+    print(f"📤 Отправлено в {to_chat_id}")
 
-    except Exception as e:
-        error_msg = f"❌ Fallback: {e}"
-        print(error_msg)
-        try:
-            send_to_telegram(error_msg, DEBUG_CHAT_ID)
-        except:
-            pass
+send_to_telegram(text, chat_id)
+send_to_telegram("✅ Пост успешно опубликован", debug_id or chat_id)
 
-if __name__ == "__main__":
-    main()
+print("🎉 Готово")
