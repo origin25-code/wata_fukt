@@ -1,55 +1,39 @@
 import os
 import openai
-import requests
-from datetime import datetime
+from dotenv import load_dotenv
+from telegram import Bot
 
-# === НАСТРОЙКИ ===
+# Загрузка переменных окружения
+load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# === PROMPT ===
+# ✅ Новый клиент OpenAI
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+# Загрузка промпта из файла
 with open("fact_prompt.txt", "r", encoding="utf-8") as f:
-    FACT_PROMPT = f.read().strip()
+    prompt = f.read().strip()
 
-# === ГЕНЕРАЦИЯ ФАКТА ===
-def generate_fact():
-    print("🔍 Генерация факта...")
-    openai.api_key = OPENAI_API_KEY
-
-    response = openai.ChatCompletion.create(
+print("🧠 Генерация факта...")
+try:
+    completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "Ты генератор фактов"},
-            {"role": "user", "content": FACT_PROMPT}
+            {"role": "system", "content": "Ты — генератор шокирующих коротких фактов"},
+            {"role": "user", "content": prompt}
         ],
-        temperature=1.0
+        temperature=0.9,
+        max_tokens=120
     )
+    fact = completion.choices[0].message.content.strip()
+    print("✅ Факт: ", fact)
 
-    fact = response["choices"][0]["message"]["content"].strip()
-    print("✅ Факт:", fact)
-    return fact
+    # Отправка в Telegram
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=fact)
+    print("📬 Отправлено в Telegram.")
 
-# === ОТПРАВКА В ТЕЛЕГРАМ ===
-def send_to_telegram(text):
-    print("📬 Отправка в Telegram...")
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text
-    }
-    response = requests.post(url, data=data)
-    print("📨 Telegram ответ:", response.status_code, response.text)
-    response.raise_for_status()
-
-# === ОСНОВНОЙ ЗАПУСК ===
-def main():
-    try:
-        fact = generate_fact()
-        send_to_telegram(fact)
-        print("🎉 Успешно отправлено!")
-    except Exception as e:
-        print("❌ Ошибка:", e)
-
-if __name__ == "__main__":
-    main()
+except Exception as e:
+    print("❌ Ошибка генерации или отправки:\n", e)
