@@ -7,6 +7,9 @@ jobs:
   post_fact:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug runner
+        run: echo "Runner is alive ✅"
+
       - name: 🔽 Клонируем репозиторий
         uses: actions/checkout@v3
 
