@@ -3,6 +3,10 @@ import requests
 import openai
 from dotenv import load_dotenv
 
+print("🧪 KEY:", os.environ.get("OPENAI_API_KEY")[:5], "...")
+print("🧪 TG BOT:", os.environ.get("TELEGRAM_BOT_TOKEN")[:10], "...")
+print("🧪 CHAT ID:", os.environ.get("TELEGRAM_CHAT_ID"))
+
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
