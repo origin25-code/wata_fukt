@@ -1,63 +1,73 @@
 import os
-import requests
 import openai
-from dotenv import load_dotenv
+import requests
+import sys
+from datetime import datetime
 
-print("🧪 KEY:", os.environ.get("OPENAI_API_KEY")[:5], "...")
-print("🧪 TG BOT:", os.environ.get("TELEGRAM_BOT_TOKEN")[:10], "...")
-print("🧪 CHAT ID:", os.environ.get("TELEGRAM_CHAT_ID"))
+# 🔍 Логируем и проверяем переменные окружения
+def check_env(key):
+    value = os.getenv(key)
+    if not value:
+        print(f"⛔ Переменная {key} не найдена")
+        sys.exit(1)
+    print(f"✅ {key} найден: {value[:5]}...")
+    return value
 
-load_dotenv()
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-DEBUG_CHAT_ID = os.getenv("DEBUG_CHAT_ID")
+OPENAI_API_KEY = check_env("OPENAI_API_KEY")
+TELEGRAM_BOT_TOKEN = check_env("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = check_env("TELEGRAM_CHAT_ID")
+DEBUG_CHAT_ID = os.getenv("DEBUG_CHAT_ID") or TELEGRAM_CHAT_ID
 
 openai.api_key = OPENAI_API_KEY
 
-def send_to_telegram(message: str, debug=False):
-    chat_id = DEBUG_CHAT_ID if debug else TELEGRAM_CHAT_ID
+# 🧠 Загружаем промпт из файла
+try:
+    with open("fact_prompt.txt", "r", encoding="utf-8") as f:
+        prompt = f.read()
+except FileNotFoundError:
+    print("⛔ Файл fact_prompt.txt не найден")
+    sys.exit(1)
+
+print("📥 Промпт загружен:")
+print(prompt[:80], "...")
+
+# 🧠 Запрос к OpenAI
+print("🚀 Отправляем запрос к OpenAI...")
+try:
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Дай один факт."}
+        ],
+        max_tokens=100,
+        temperature=0.9,
+    )
+except Exception as e:
+    print("⛔ Ошибка OpenAI:", str(e))
+    sys.exit(1)
+
+fact = response['choices'][0]['message']['content'].strip()
+print("🧠 Факт получен:")
+print(fact)
+
+# 📤 Отправка в Telegram
+def send_telegram(message: str, chat_id: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
+    data = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown",
+        "parse_mode": "Markdown"
     }
-    try:
-        response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
-    except Exception as e:
-        print("❌ Ошибка при отправке в Telegram:", e)
+    r = requests.post(url, data=data)
+    if not r.ok:
+        print(f"⛔ Ошибка Telegram: {r.status_code} — {r.text}")
+        sys.exit(1)
+    print(f"✅ Успешно отправлено в чат {chat_id}")
 
-def main():
-    print("📂 Читаем файл prompt...")
-    try:
-        with open("fact_prompt.txt", "r", encoding="utf-8") as f:
-            prompt = f.read()
-    except FileNotFoundError:
-        send_to_telegram("❌ Не найден файл `fact_prompt.txt`", debug=True)
-        return
+# 🔁 Отправляем факт
+send_telegram(fact, TELEGRAM_CHAT_ID)
 
-    print("📥 Отправляем запрос в OpenAI...")
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=1,
-            max_tokens=100,
-            timeout=30
-        )
-    except Exception as e:
-        send_to_telegram(f"❌ Ошибка OpenAI:\n{e}", debug=True)
-        return
-
-    try:
-        fact = response["choices"][0]["message"]["content"].strip()
-        print("✅ Получен факт:", fact)
-        send_to_telegram(fact)
-    except Exception as e:
-        send_to_telegram(f"❌ Ошибка обработки ответа:\n{e}", debug=True)
-
-if __name__ == "__main__":
-    main()
+# 🪵 Лог-фраза в DEBUG чат
+timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+send_telegram(f"🛠️ factbot.py завершён в {timestamp}", DEBUG_CHAT_ID)
