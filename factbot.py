@@ -1,43 +1,52 @@
 import os
 from openai import OpenAI
-import requests
+from telegram import Bot
+from dotenv import load_dotenv
 
-# Промпт из файла
-with open("fact_prompt.txt", "r", encoding="utf-8") as f:
-    prompt = f.read().strip()
+# === Загрузка переменных среды ===
+load_dotenv()
 
-# Загружаем переменные окружения
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+DEBUG_CHAT_ID = os.getenv("DEBUG_CHAT_ID")
 
-# Проверка токенов
-if not all([OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
-    raise ValueError("⛔ Не все переменные окружения заданы")
-
-print("🔑 OPENAI_API_KEY найден:", OPENAI_API_KEY[:5], "...")
-print("🤖 TELEGRAM_BOT_TOKEN найден:", TELEGRAM_BOT_TOKEN[:5], "...")
-print("💬 TELEGRAM_CHAT_ID найден:", TELEGRAM_CHAT_ID)
-
-# Создаём клиента OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Получаем факт
-print("🚀 Отправляем запрос к OpenAI...")
-completion = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[{"role": "user", "content": prompt}],
-)
-fact = completion.choices[0].message.content.strip()
+def load_prompt():
+    with open("fact_prompt.txt", "r", encoding="utf-8") as file:
+        return file.read().strip()
 
-print("📤 Факт получен:", fact)
+def generate_fact():
+    prompt = load_prompt()
 
-# Отправляем в Telegram
-url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-data = {
-    "chat_id": TELEGRAM_CHAT_ID,
-    "text": fact,
-    "parse_mode": "Markdown",
-}
-response = requests.post(url, data=data)
-print("✅ Telegram ответ:", response.status_code, response.text)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "Ты генератор фактов"},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=1.0
+    )
+
+    return response.choices[0].message.content.strip()
+
+def send_to_telegram(text):
+    bot = Bot(token=TELEGRAM_TOKEN)
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=text)
+
+def main():
+    try:
+        print("🔍 Генерация факта...")
+        fact = generate_fact()
+        print("✅ Факт: ", fact)
+
+        send_to_telegram(fact)
+        print("📬 Отправлено в Telegram.")
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+        if DEBUG_CHAT_ID and TELEGRAM_TOKEN:
+            Bot(token=TELEGRAM_TOKEN).send_message(chat_id=DEBUG_CHAT_ID, text=f"❌ FactBot error:\n{e}")
+
+if __name__ == "__main__":
+    main()
