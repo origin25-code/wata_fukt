@@ -2,35 +2,45 @@ import os
 import requests
 import openai
 
-# Логируем первые символы ключей
-print("🧪 KEY:", os.environ.get("OPENAI_API_KEY")[:5], "...")
-print("🧪 TG_TOKEN:", os.environ.get("TELEGRAM_BOT_TOKEN")[:5], "...")
+# Проверка ключей
+print("🔑 OPENAI_API_KEY:", os.environ.get("OPENAI_API_KEY")[:5], "...")
+print("🔑 TELEGRAM_BOT_TOKEN:", os.environ.get("TELEGRAM_BOT_TOKEN")[:5], "...")
+print("🔑 CHAT_ID:", os.environ.get("DEBUG_CHAT_ID") or os.environ.get("TELEGRAM_CHAT_ID"))
 
 # Промпт
 with open("fact_prompt.txt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
-openai.api_key = os.environ["OPENAI_API_KEY"]
+try:
+    # Генерация факта
+    print("🚀 Запрос к OpenAI...")
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Сгенерируй 1 факт"},
+        ],
+        temperature=1.0,
+        request_timeout=30,
+    )
+    fact = response.choices[0].message.content.strip()
+    print("✅ Факт получен:", fact)
 
-response = openai.ChatCompletion.create(
-    model="gpt-4o",
-    messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": "Сгенерируй 1 факт"},
-    ],
-    temperature=1,
-)
+except openai.error.OpenAIError as e:
+    fact = f"❌ OpenAI error: {e}"
+    print(fact)
 
-fact = response.choices[0].message.content.strip()
-print("📦 Generated Fact:\n", fact)
+# Telegram
+token = os.environ.get("TELEGRAM_BOT_TOKEN")
+chat_id = os.environ.get("DEBUG_CHAT_ID") or os.environ.get("TELEGRAM_CHAT_ID")
 
-# Отправка в Telegram
-tg_token = os.environ["TELEGRAM_BOT_TOKEN"]
-chat_id = os.environ.get("DEBUG_CHAT_ID", os.environ["TELEGRAM_CHAT_ID"])
+try:
+    print("📬 Отправляем в Telegram...")
+    resp = requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data={"chat_id": chat_id, "text": fact}
+    )
+    print("📦 Telegram ответ:", resp.status_code, resp.text)
 
-resp = requests.post(
-    f"https://api.telegram.org/bot{tg_token}/sendMessage",
-    data={"chat_id": chat_id, "text": fact},
-)
-
-print("📬 Telegram Response:", resp.status_code, resp.text)
+except Exception as e:
+    print("❌ Ошибка Telegram:", e)
